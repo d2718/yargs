@@ -1,0 +1,14 @@
+[package]
+name = "yargs"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.60.0" #req'd by the regex crate
+authors = ["Dan (d2718) <d2718@gmail.com>"]
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/d2718/yargs"
+description = "A friendlier xargs replacement."
+
+[dependencies]
+clap = { version = "^4.3", features = ["derive"] }
+regex = "^1.9"
