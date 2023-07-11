@@ -1,4 +1,5 @@
 use std::{
+    ffi::{OsStr, OsString},
     fmt::{write, Write},
     process::Command,
 };
@@ -10,11 +11,11 @@ use clap::Parser;
 struct Opts {
     /// Command to run for each input item.
     #[arg(value_name = "command")]
-    cmd: Vec<String>,
+    cmd: Vec<OsString>,
 
     /// Input item delimiter (default is a newline).
     #[arg(short, long)]
-    delim: Option<String>,
+    delim: Option<OsString>,
 
     /// Continue on error (default is to stop).
     #[arg(short, long = "continue")]
@@ -29,7 +30,7 @@ fn write_command_line<W: Write>(mut buff: W, cmd: &Command) -> std::fmt::Result 
     Ok(())
 }
 
-fn execute<S: AsRef<str>>(item: &str, cmd: &[S]) -> Result<(), String> {
+fn execute<S: AsRef<OsStr>>(item: &OsStr, cmd: &[S]) -> Result<(), String> {
     let exec = cmd.first().unwrap().as_ref();
     let mut prog = Command::new(exec);
 
