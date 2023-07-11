@@ -1,10 +1,13 @@
 use std::{
     ffi::{OsStr, OsString},
-    fmt::{write, Write},
+    fmt::Write,
+    io::stdin,
     process::Command,
 };
 
 use clap::Parser;
+
+use yargs::iter::RegexChunker;
 
 #[derive(Debug, Parser)]
 #[command(author, version, about)]
@@ -15,13 +18,15 @@ struct Opts {
 
     /// Input item delimiter (default is a newline).
     #[arg(short, long)]
-    delim: Option<OsString>,
+    delim: Option<String>,
 
     /// Continue on error (default is to stop).
     #[arg(short, long = "continue")]
     cont: bool,
 }
 
+/// Write the command an arguments passed to `cmd`.
+/// This is for reporting errors.
 fn write_command_line<W: Write>(mut buff: W, cmd: &Command) -> std::fmt::Result {
     write!(buff, "\"{}\"", &cmd.get_program().to_string_lossy())?;
     for arg in cmd.get_args() {
@@ -30,6 +35,8 @@ fn write_command_line<W: Write>(mut buff: W, cmd: &Command) -> std::fmt::Result 
     Ok(())
 }
 
+/// Execute the command line whose args are in `cmd`. If one of the args is
+/// a bare '.', replace it with `item`; otherwise, insert `item` at the end.
 fn execute<S: AsRef<OsStr>>(item: &OsStr, cmd: &[S]) -> Result<(), String> {
     let exec = cmd.first().unwrap().as_ref();
     let mut prog = Command::new(exec);
@@ -72,8 +79,15 @@ fn execute<S: AsRef<OsStr>>(item: &OsStr, cmd: &[S]) -> Result<(), String> {
     }
 }
 
-fn main() {
+fn main() -> Result<(), String> {
     let opts = Opts::parse();
 
-    println!("{:?}", &opts);
+    let delim_str = opts.delim.as_deref().unwrap_or(r"\r?\n");
+
+    for item in RegexChunker::new(stdin(), delim_str).unwrap() {
+        let item = item.unwrap();
+        execute(&item, &opts.cmd)?;
+    }
+
+    Ok(())
 }
