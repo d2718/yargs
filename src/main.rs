@@ -1,28 +1,40 @@
+mod iter;
+mod opt;
+
 use std::{
-    ffi::{OsStr, OsString},
+    ffi::OsStr,
     fmt::Write,
     io::stdin,
-    process::Command,
+    process::{exit, Command},
 };
 
-use clap::Parser;
+use iter::RegexChunker;
+use opt::Opts;
 
-use yargs::iter::RegexChunker;
+const VERSION: &str = env!("CARGO_PKG_VERSION");
 
-#[derive(Debug, Parser)]
-#[command(author, version, about)]
-struct Opts {
-    /// Command to run for each input item.
-    #[arg(value_name = "command")]
-    cmd: Vec<OsString>,
+static HELP: &str = r#"A friendlier xargs. Also a piratical exclamation.
 
-    /// Input item delimiter (default is a newline).
-    #[arg(short, long)]
-    delim: Option<String>,
+Usage: yargs [ OPTIONS ] <CMD> [ ARGS... ]
 
-    /// Continue on error (default is to stop).
-    #[arg(short, long = "continue")]
-    cont: bool,
+Arguments:
+  <CMD> Command to execute for each item of input
+  [ARGS...] Additional arguments to <CMD>
+
+Options:
+  -d, --delimiter <DELIM>  Regex to delimit input items
+                           (default is "\r?\n")
+  -c, --continue           Continue and ignore errors
+                           (default is to halt upon error)
+  -h, --help               Print this message
+  -V, --version            Print version information"#;
+
+fn print_version() {
+    println!("yargs {}", VERSION);
+}
+
+fn print_help() {
+    println!("{}", HELP);
 }
 
 /// Write the command an arguments passed to `cmd`.
@@ -37,12 +49,11 @@ fn write_command_line<W: Write>(mut buff: W, cmd: &Command) -> std::fmt::Result 
 
 /// Execute the command line whose args are in `cmd`. If one of the args is
 /// a bare '.', replace it with `item`; otherwise, insert `item` at the end.
-fn execute<S: AsRef<OsStr>>(item: &OsStr, cmd: &[S]) -> Result<(), String> {
-    let exec = cmd.first().unwrap().as_ref();
+fn execute<S: AsRef<OsStr>>(item: &OsStr, exec: &OsStr, args: &[S]) -> Result<(), String> {
     let mut prog = Command::new(exec);
 
     let mut subbed = false;
-    for arg in &cmd[1..] {
+    for arg in args.iter() {
         let arg = arg.as_ref();
         if arg == "." {
             prog.arg(item);
@@ -66,7 +77,7 @@ fn execute<S: AsRef<OsStr>>(item: &OsStr, cmd: &[S]) -> Result<(), String> {
     };
 
     if status.success() {
-        return Ok(());
+        Ok(())
     } else {
         let mut err_msg = String::new();
         write_command_line(&mut err_msg, &prog).map_err(|e| format!("{}", &e))?;
@@ -75,18 +86,32 @@ fn execute<S: AsRef<OsStr>>(item: &OsStr, cmd: &[S]) -> Result<(), String> {
                 .map_err(|e| format!("{}", &e))?,
             None => write!(&mut err_msg, " exited with failure").map_err(|e| format!("{}", &e))?,
         }
-        return Err(err_msg);
+        Err(err_msg)
     }
 }
 
 fn main() -> Result<(), String> {
-    let opts = Opts::parse();
+    let opts = Opts::parse()?;
 
-    let delim_str = opts.delim.as_deref().unwrap_or(r"\r?\n");
+    if opts.help {
+        print_help();
+        exit(0);
+    } else if opts.version {
+        print_version();
+        exit(0);
+    }
 
-    for item in RegexChunker::new(stdin(), delim_str).unwrap() {
+    let exec = match opts.exec {
+        Some(exec) => exec,
+        None => {
+            eprintln!("Must supply command to execute.");
+            exit(2);
+        }
+    };
+
+    for item in RegexChunker::new(stdin(), &opts.fence).unwrap() {
         let item = item.unwrap();
-        execute(&item, &opts.cmd)?;
+        execute(&item, &exec, &opts.args)?;
     }
 
     Ok(())

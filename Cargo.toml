@@ -10,5 +10,4 @@ repository = "https://github.com/d2718/yargs"
 description = "A friendlier xargs replacement."
 
 [dependencies]
-clap = { version = "^4.3", features = ["derive"] }
 regex = "^1.9"

@@ -59,7 +59,7 @@ impl<R> RegexChunker<R> {
         self.search_buff.resize(start, 0);
         std::mem::swap(&mut new_buff, &mut self.search_buff);
         self.no_match_in_buff = false;
-        return Some(new_buff);
+        Some(new_buff)
     }
 }
 
