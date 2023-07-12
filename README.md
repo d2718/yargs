@@ -18,6 +18,12 @@ Options:
   -V, --version            Print version information
 ```
 
+## Installation
+
+It should just `cargo build --release`.
+
+## Use
+
 Like `xargs`, `yargs` reads items from stdin and executes the supplied
 command once for each argument.
 
@@ -69,9 +75,71 @@ wc: test: Is a directory
 Specify an alternate regular expression to separate items with `-d`.
 (The default is `\r?\n`, the "cross-platform newline".)
 
-## Issues / To Do
+## Windows Quirks
 
-Investigate and support Windows (works fine on WSL2).
+### PowerShell is not particularly composable
+
+This program will run under 64-bit Windows, doing what it says on the tin,
+but is awkward because Powershell's built-in listing facilities generate
+a lot of noise by default:
+
+```text
+PS C:\Users\19195\dev\yargs> ls
+
+
+    Directory: C:\Users\19195\dev\yargs
+
+
+    Mode                 LastWriteTime         Length Name
+    ----                 -------------         ------ ----
+    d-----         7/12/2023  11:39 AM                src
+    d-----         7/12/2023  11:43 AM                target
+    d-----         7/12/2023  10:31 AM                test
+    -a----         7/12/2023  10:31 AM            442 .gitignore
+    -a----         7/12/2023  11:43 AM           1324 Cargo.lock
+    -a----         7/12/2023  12:10 PM            316 Cargo.toml
+    -a----         7/12/2023  10:31 AM           1060 LICENSE
+    -a----         7/12/2023  10:31 AM           1941 README.md
+    
+```
+
+You can get around this particular problem with `Get-ChildItem -name`,
+
+```text
+PS C:\Users\19195\dev\yargs> Get-ChildItem -name
+src
+target
+test
+.gitignore
+Cargo.lock
+Cargo.toml
+LICENSE
+README.md
+```
+
+or better yet with a
+[`find`](https://www.gnu.org/software/findutils/manual/html_mono/find.html)-like
+utility for Windows (if one exists).
+
+However, a lot of facilities that are supplied by programs in a Unix-style
+environment are "PowerShell Cmdlets" that can't be run like a program:
+
+```text
+PS C:\Users\19195\dev\yargs> Get-ChildItem -file -name | target/debug/yargs Copy-Item . scratch
+Error: "error running \"Copy-Item\" \".gitignore\" \"scratch\" :program not found"
+```
+
+__It works fine on WSL2.__
+
+### UTF-16
+
+Windows plumbing uses UTF-16 for some reason, so `OsStrings` (and `&OsStr`s)
+don't convert nicely to byte slices (`&[u16]`!! blech!). The easiest thing
+for the short term was to just convert all input into `String` under Windows.
+So all inputs and command-line arguments have to be valid Unicode under
+Windows.
+
+## Issues / To Do
 
 Add support for `\1`, `\2`, &c. syntax in command line to allow the use of
 multiple items in a single command.

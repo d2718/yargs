@@ -2,7 +2,9 @@
 Because yargs involves entering command-line options for _another_ program
 on its command line, some special argument parsing is in order.
 */
-use std::{ffi::OsString, os::unix::ffi::OsStrExt};
+use std::ffi::OsString;
+#[cfg(unix)]
+use os::unix::ffi::OsStrExt;
 
 static DEFAULT_FENCE: &str = r#"\r?\n"#;
 
@@ -43,6 +45,7 @@ impl Opts {
         for arg in std::env::args_os().skip(1) {
             match mode {
                 ArgMode::PostPositional => args.push(arg),
+                #[cfg(unix)]
                 ArgMode::Positional => match arg.as_bytes() {
                     b"--" => {
                         mode = ArgMode::PostPositional;
@@ -65,6 +68,43 @@ impl Opts {
                         help = true;
                     }
                     b"-V" | b"--version" => {
+                        version = true;
+                    }
+                    _ => {
+                        if exec.is_none() {
+                            exec = Some(arg);
+                        } else {
+                            args.push(arg);
+                        }
+                    }
+                },
+                #[cfg(windows)]
+                ArgMode::Positional => match arg.to_str()
+                    .ok_or_else(|| format!(
+                        "argument not valid UTF-8: {}", &arg.to_string_lossy()
+                    ))?
+                {
+                    "--" => {
+                        mode = ArgMode::PostPositional;
+                    }
+                    "-d" | "--delim" | "--delimiter" => {
+                        if fence.is_none() {
+                            mode = ArgMode::Fence;
+                        } else {
+                            args.push(arg);
+                        }
+                    }
+                    "-c" | "--cont" | "--continue" => {
+                        if cont {
+                            args.push(arg);
+                        } else {
+                            cont = true;
+                        }
+                    }
+                    "-h" | "--help" => {
+                        help = true;
+                    }
+                    "-V" | "--version" => {
                         version = true;
                     }
                     _ => {

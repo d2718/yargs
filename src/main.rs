@@ -1,4 +1,8 @@
+
+#[cfg(unix)]
 mod iter;
+#[cfg(windows)]
+mod winiter;
 mod opt;
 
 use std::{
@@ -8,7 +12,10 @@ use std::{
     process::{exit, Command},
 };
 
+#[cfg(unix)]
 use iter::RegexChunker;
+#[cfg(windows)]
+use winiter::RegexChunker;
 use opt::Opts;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -49,12 +56,17 @@ fn write_command_line<W: Write>(mut buff: W, cmd: &Command) -> std::fmt::Result 
 
 /// Execute the command line whose args are in `cmd`. If one of the args is
 /// a bare '.', replace it with `item`; otherwise, insert `item` at the end.
-fn execute<S: AsRef<OsStr>>(
-    item: &OsStr,
-    exec: &OsStr,
-    args: &[S],
+fn execute<S, T, U>(
+    item: S,
+    exec: T,
+    args: &[U],
     cont: bool,
-) -> Result<(), String> {
+) -> Result<(), String>
+where
+    S: AsRef<OsStr> + Copy,
+    T: AsRef<OsStr>,
+    U: AsRef<OsStr>,
+{
     let mut prog = Command::new(exec);
 
     let mut subbed = false;
