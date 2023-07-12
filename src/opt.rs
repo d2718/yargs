@@ -4,6 +4,8 @@ on its command line, some special argument parsing is in order.
 */
 use std::{ffi::OsString, os::unix::ffi::OsStrExt};
 
+static DEFAULT_FENCE: &str = r#"\r?\n"#;
+
 enum ArgMode {
     Positional,
     PostPositional,
@@ -32,7 +34,7 @@ impl Opts {
     pub fn parse() -> Result<Opts, String> {
         let mut exec: Option<OsString> = None;
         let mut args: Vec<OsString> = Vec::new();
-        let mut fence = r"\r?\n".to_string();
+        let mut fence: Option<String> = None;
         let mut cont = false;
         let mut help = false;
         let mut version = false;
@@ -46,10 +48,18 @@ impl Opts {
                         mode = ArgMode::PostPositional;
                     }
                     b"-d" | b"--delim" | b"--delimiter" => {
-                        mode = ArgMode::Fence;
+                        if fence.is_none() {
+                            mode = ArgMode::Fence;
+                        } else {
+                            args.push(arg);
+                        }
                     }
                     b"-c" | b"--cont" | b"--continue" => {
-                        cont = true;
+                        if cont {
+                            args.push(arg);
+                        } else {
+                            cont = true;
+                        }
                     }
                     b"-h" | b"--help" => {
                         help = true;
@@ -67,7 +77,7 @@ impl Opts {
                 },
                 ArgMode::Fence => {
                     if let Some(dstr) = arg.to_str() {
-                        fence = dstr.to_string();
+                        fence = Some(dstr.to_string());
                     } else {
                         return Err(format!(
                             "invalid delimiter regex: {}",
@@ -77,6 +87,8 @@ impl Opts {
                 }
             }
         }
+
+        let fence = fence.unwrap_or_else(|| String::from(DEFAULT_FENCE));
 
         Ok(Opts {
             exec,

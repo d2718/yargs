@@ -46,12 +46,30 @@ $ ls src/* | yargs wc -- -c
 2794 src/opt.rs
 ```
 
+If you've already used one of `yargs`'s flags, it'll automatically get
+passed on if you specify it again.
+
+```text
+$ ls | target/debug/yargs -c wc -c
+1324 Cargo.lock
+316 Cargo.toml
+1060 LICENSE
+1542 README.md
+wc: src: Is a directory
+0 src
+"wc" "-c" "src" returned exit code 1
+wc: target: Is a directory
+0 target
+"wc" "-c" "target" returned exit code 1
+wc: test: Is a directory
+0 test
+"wc" "-c" "test" returned exit code 1
+```
+
 Specify an alternate regular expression to separate items with `-d`.
 (The default is `\r?\n`, the "cross-platform newline".)
 
 ## Issues / To Do
-
-Implement the `-c` option.
 
 Investigate and support Windows (works fine on WSL2).
 

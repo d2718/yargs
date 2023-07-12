@@ -49,7 +49,12 @@ fn write_command_line<W: Write>(mut buff: W, cmd: &Command) -> std::fmt::Result 
 
 /// Execute the command line whose args are in `cmd`. If one of the args is
 /// a bare '.', replace it with `item`; otherwise, insert `item` at the end.
-fn execute<S: AsRef<OsStr>>(item: &OsStr, exec: &OsStr, args: &[S]) -> Result<(), String> {
+fn execute<S: AsRef<OsStr>>(
+    item: &OsStr,
+    exec: &OsStr,
+    args: &[S],
+    cont: bool,
+) -> Result<(), String> {
     let mut prog = Command::new(exec);
 
     let mut subbed = false;
@@ -72,7 +77,12 @@ fn execute<S: AsRef<OsStr>>(item: &OsStr, exec: &OsStr, args: &[S]) -> Result<()
             let mut err_msg = "error running ".to_string();
             write_command_line(&mut err_msg, &prog).map_err(|e| format!("{}", &e))?;
             write!(&mut err_msg, " :{}", &e).map_err(|e| format!("{}", &e))?;
-            return Err(err_msg);
+            if cont {
+                eprintln!("{}", &err_msg);
+                return Ok(());
+            } else {
+                return Err(err_msg);
+            }
         }
     };
 
@@ -86,7 +96,12 @@ fn execute<S: AsRef<OsStr>>(item: &OsStr, exec: &OsStr, args: &[S]) -> Result<()
                 .map_err(|e| format!("{}", &e))?,
             None => write!(&mut err_msg, " exited with failure").map_err(|e| format!("{}", &e))?,
         }
-        Err(err_msg)
+        if cont {
+            eprintln!("{}", &err_msg);
+            Ok(())
+        } else {
+            Err(err_msg)
+        }
     }
 }
 
@@ -111,7 +126,7 @@ fn main() -> Result<(), String> {
 
     for item in RegexChunker::new(stdin(), &opts.fence).unwrap() {
         let item = item.unwrap();
-        execute(&item, &exec, &opts.args)?;
+        execute(&item, &exec, &opts.args, opts.cont)?;
     }
 
     Ok(())
