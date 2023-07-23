@@ -134,10 +134,13 @@ __It works fine on WSL2.__
 ### UTF-16
 
 Windows plumbing uses UTF-16 for some reason, so `OsStrings` (and `&OsStr`s)
-don't convert nicely to byte slices (`&[u16]`!! blech!). The easiest thing
+don't convert nicely to byte slices (`&[u16]`!! blech!). ~~The easiest thing
 for the short term was to just convert all input into `String` under Windows.
 So all inputs and command-line arguments have to be valid Unicode under
-Windows.
+Windows.~~ Actually, I think I got this figured out, and ended up being
+able to remove the `#[cfg(windows)]` and `#[cfg(unix)]` stuff. The custom
+regex delimiter still has to be converted to a string, but that's the
+case on all platforms.
 
 ## Issues / To Do
 

@@ -2,11 +2,65 @@
 Because yargs involves entering command-line options for _another_ program
 on its command line, some special argument parsing is in order.
 */
-use std::ffi::OsString;
-#[cfg(unix)]
-use os::unix::ffi::OsStrExt;
+use std::{
+    collections::HashMap,
+    ffi::OsString,
+};
 
 static DEFAULT_FENCE: &str = r#"\r?\n"#;
+
+/*
+Okay, so this is slightly annoying.
+
+It's not possible to use OsStr literals in match patterns because OsStr
+literals don't exist. The standard way to match an OsStr is to cast it
+to either a byte slice or a string slice and match against _those_
+literals.
+
+HOWEVER, an OsStr can't be cast to a byte slice on Windows because
+Windows uses `&[u16]` as the backing store for it! UTF-16!!! AND,
+casting to an `&str` would mean choking on non-UTF-8 data that may
+nonetheless be a valid OsStr.
+
+So our solution here is to define an enum for the different possible
+flag/option tokens, build a HashMap of OsStrs to those enum values,
+and then match on the enums.This is maybe awkward and inelegant,
+but it's portable and doesn't require any #[cfg(<os_type>)] flags
+(at least not on my part).
+*/
+#[derive(Clone, Copy, Default)]
+enum ArgOpt {
+    Hyphens,
+    Delimiter,
+    Continue,
+    Help,
+    Version,
+    #[default]
+    None,
+}
+
+// 
+static OPT_MAP: &[(ArgOpt, &[&str])] = &[
+    (ArgOpt::Hyphens,   &["--"]),
+    (ArgOpt::Delimiter, &["-d", "--delim", "--delimiter"]),
+    (ArgOpt::Continue,  &["-c", "--cont", "--continue"]),
+    (ArgOpt::Help,      &["-h", "--help"]),
+    (ArgOpt::Version,   &["-V", "--version"]),
+];
+
+// Generates the HashMap used for flag/option lookup in the
+// command-line-argument parsing loop.
+fn make_opt_map() -> HashMap<OsString, ArgOpt> {
+    let mut m: HashMap<OsString, ArgOpt> = HashMap::new();
+
+    for &(opt, flags) in OPT_MAP.iter() {
+        for f in flags.iter() {
+            m.insert(OsString::from(f), opt);
+        }
+    }
+
+    m
+}
 
 enum ArgMode {
     Positional,
@@ -42,72 +96,38 @@ impl Opts {
         let mut version = false;
         let mut mode = ArgMode::Positional;
 
+        let opt_map = make_opt_map();
+
         for arg in std::env::args_os().skip(1) {
             match mode {
                 ArgMode::PostPositional => args.push(arg),
-                #[cfg(unix)]
-                ArgMode::Positional => match arg.as_bytes() {
-                    b"--" => {
-                        mode = ArgMode::PostPositional;
-                    }
-                    b"-d" | b"--delim" | b"--delimiter" => {
-                        if fence.is_none() {
-                            mode = ArgMode::Fence;
-                        } else {
-                            args.push(arg);
-                        }
-                    }
-                    b"-c" | b"--cont" | b"--continue" => {
-                        if cont {
-                            args.push(arg);
-                        } else {
-                            cont = true;
-                        }
-                    }
-                    b"-h" | b"--help" => {
-                        help = true;
-                    }
-                    b"-V" | b"--version" => {
-                        version = true;
-                    }
-                    _ => {
-                        if exec.is_none() {
-                            exec = Some(arg);
-                        } else {
-                            args.push(arg);
-                        }
-                    }
-                },
-                #[cfg(windows)]
-                ArgMode::Positional => match arg.to_str()
-                    .ok_or_else(|| format!(
-                        "argument not valid UTF-8: {}", &arg.to_string_lossy()
-                    ))?
+                ArgMode::Positional => match opt_map.get(&arg).cloned()
+                    .unwrap_or_default()
                 {
-                    "--" => {
+                    ArgOpt::Hyphens => {
                         mode = ArgMode::PostPositional;
                     }
-                    "-d" | "--delim" | "--delimiter" => {
+                    ArgOpt::Delimiter => {
                         if fence.is_none() {
                             mode = ArgMode::Fence;
                         } else {
                             args.push(arg);
                         }
                     }
-                    "-c" | "--cont" | "--continue" => {
+                    ArgOpt::Continue => {
                         if cont {
                             args.push(arg);
                         } else {
                             cont = true;
                         }
                     }
-                    "-h" | "--help" => {
+                    ArgOpt::Help => {
                         help = true;
                     }
-                    "-V" | "--version" => {
+                    ArgOpt::Version => {
                         version = true;
                     }
-                    _ => {
+                    ArgOpt::None => {
                         if exec.is_none() {
                             exec = Some(arg);
                         } else {

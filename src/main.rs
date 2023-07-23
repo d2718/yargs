@@ -1,8 +1,4 @@
 
-#[cfg(unix)]
-mod iter;
-#[cfg(windows)]
-mod winiter;
 mod opt;
 
 use std::{
@@ -12,10 +8,9 @@ use std::{
     process::{exit, Command},
 };
 
-#[cfg(unix)]
-use iter::RegexChunker;
-#[cfg(windows)]
-use winiter::RegexChunker;
+use bstr::ByteSlice;
+use regex_chunker::ByteChunker;
+
 use opt::Opts;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -56,16 +51,14 @@ fn write_command_line<W: Write>(mut buff: W, cmd: &Command) -> std::fmt::Result 
 
 /// Execute the command line whose args are in `cmd`. If one of the args is
 /// a bare '.', replace it with `item`; otherwise, insert `item` at the end.
-fn execute<S, T, U>(
-    item: S,
-    exec: T,
-    args: &[U],
+fn execute<S>(
+    item: &OsStr,
+    exec: &OsStr,
+    args: &[S],
     cont: bool,
 ) -> Result<(), String>
 where
-    S: AsRef<OsStr> + Copy,
-    T: AsRef<OsStr>,
-    U: AsRef<OsStr>,
+    S: AsRef<OsStr>
 {
     let mut prog = Command::new(exec);
 
@@ -136,9 +129,10 @@ fn main() -> Result<(), String> {
         }
     };
 
-    for item in RegexChunker::new(stdin(), &opts.fence).unwrap() {
-        let item = item.unwrap();
-        execute(&item, &exec, &opts.args, opts.cont)?;
+    for item in ByteChunker::new(stdin(), &opts.fence).unwrap() {
+        let item = item.map_err(|e| format!("{}", &e))?;
+        let os_item = item.to_os_str_lossy();
+        execute(&os_item, &exec, &opts.args, opts.cont)?;
     }
 
     Ok(())
