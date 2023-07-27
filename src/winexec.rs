@@ -2,17 +2,20 @@
 Facilities for executing commands on Windows.
 */
 use super::err::YargErr;
-use std::process::Command;
+use std::{
+    io::Write,
+    process::{Command, Stdio},
+};
 
 static SHELL: &str = "powershell";
-static SHELL_ARGS: &[&str] = ["-NoProfile", "-Command", "-"];
+static SHELL_ARGS: &[&str] = &["-NoProfile", "-Command", "-"];
 
-pub fn execute(item: &str, prog: &str, args: &[&str]) -> Resut<(), YargErr> {
+pub fn execute(item: &str, prog: &str, args: &[&str]) -> Result<(), YargErr> {
     let mut prog = Command::new(prog);
 
     let mut subbed = false;
     for arg in args.iter() {
-        if arg == "." {
+        if arg == &"." {
             prog.arg(item);
             subbed = true;
         } else {
@@ -32,16 +35,16 @@ pub fn execute(item: &str, prog: &str, args: &[&str]) -> Resut<(), YargErr> {
             }
         }
         Err(e) => Err(YargErr::exec_err(&prog, e)),
-    };
+    }
 }
 
-pub fn shell_execute(item: &str, prog: &str, args: &[&str]) {
-    let subbed = false;
+pub fn shell_execute(item: &str, prog: &str, args: &[&str]) -> Result<(), YargErr> {
+    let mut subbed = false;
     let mut arg_vec: Vec<&str> = [prog]
         .iter()
         .chain(args.iter())
         .map(|s| {
-            if s == "." {
+            if s == &"." {
                 subbed = true;
                 item
             } else {
@@ -57,17 +60,24 @@ pub fn shell_execute(item: &str, prog: &str, args: &[&str]) {
     let mut prog = Command::new(SHELL);
     prog.args(SHELL_ARGS).stdin(Stdio::piped());
 
-    let child = prog.spawn()?;
+    let mut child = prog.spawn()?;
 
-    let mut input = child
-        .stdin
-        .take()
-        .ok_or_else(|| YargErr::new("can't get a handle on stdin".to_string()))?;
-    input.write_all(subshell_cmd.as_bytes())?;
+    /*
+    We need this scope here so that `child`'s stdin will get dropped.
+    Otherwise powershell will just wait to keep reading from stdin forever.
+    */
+    {
+        let mut input = child
+            .stdin
+            .take()
+            .ok_or_else(|| YargErr::new("can't get a handle on stdin".to_string()))?;
+        input.write_all(subshell_cmd.as_bytes())?;
+        input.flush()?;
+    }
 
     match child.wait() {
-        Ok(s) => {
-            if s.success() {
+        Ok(status) => {
+            if status.success() {
                 Ok(())
             } else {
                 Err(YargErr::exit_err(&prog, status))
