@@ -12,3 +12,4 @@ description = "A friendlier xargs replacement."
 [dependencies]
 bstr = "1.6.0"
 regex-chunker = "0.3.0"
+shlex = "1.1.0"

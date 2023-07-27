@@ -1,15 +1,19 @@
-/**!
+/*!
 Because yargs involves entering command-line options for _another_ program
 on its command line, some special argument parsing is in order.
 */
-use std::{
-    collections::HashMap,
-    ffi::OsString,
-};
+use std::ffi::OsString;
 
 static DEFAULT_FENCE: &str = r#"\r?\n"#;
 
 /*
+THE FOLLOWING WORKAROUND HAS BEEN TEMPORARILY REMOVED, and replaced by
+a different workaround. Currently all arguments must be valid UTF-8 Strings;
+eventually this may get switched back to the more relaxed OsString, so
+this code is staying here for the time being.
+
+***
+
 Okay, so this is slightly annoying.
 
 It's not possible to use OsStr literals in match patterns because OsStr
@@ -27,11 +31,12 @@ flag/option tokens, build a HashMap of OsStrs to those enum values,
 and then match on the enums.This is maybe awkward and inelegant,
 but it's portable and doesn't require any #[cfg(<os_type>)] flags
 (at least not on my part).
-*/
+
 #[derive(Clone, Copy, Default)]
 enum ArgOpt {
     Hyphens,
     Delimiter,
+    Subshell,
     Continue,
     Help,
     Version,
@@ -39,13 +44,16 @@ enum ArgOpt {
     None,
 }
 
-// 
 static OPT_MAP: &[(ArgOpt, &[&str])] = &[
-    (ArgOpt::Hyphens,   &["--"]),
+    (ArgOpt::Hyphens, &["--"]),
     (ArgOpt::Delimiter, &["-d", "--delim", "--delimiter"]),
-    (ArgOpt::Continue,  &["-c", "--cont", "--continue"]),
-    (ArgOpt::Help,      &["-h", "--help"]),
-    (ArgOpt::Version,   &["-V", "--version"]),
+    (
+        ArgOpt::Subshell,
+        &["-s", "--sub", "--sh", "--shell", "--subshell"],
+    ),
+    (ArgOpt::Continue, &["-c", "--cont", "--continue"]),
+    (ArgOpt::Help, &["-h", "--help"]),
+    (ArgOpt::Version, &["-V", "--version"]),
 ];
 
 // Generates the HashMap used for flag/option lookup in the
@@ -61,6 +69,7 @@ fn make_opt_map() -> HashMap<OsString, ArgOpt> {
 
     m
 }
+*/
 
 enum ArgMode {
     Positional,
@@ -71,13 +80,15 @@ enum ArgMode {
 pub struct Opts {
     /// Name of program/shell command.
     /// Should be first positional argument.
-    pub exec: Option<OsString>,
+    pub exec: Option<String>,
     /// Arguments to program/shell command.
     /// The rest of the positional arguments.
-    pub args: Vec<OsString>,
+    pub args: Vec<String>,
     /// Pattern for the regex used to delimit items.
     /// Should default to "\r?\n" (X-platform newline).
     pub fence: String,
+    /// Run commands in a subshell.
+    pub subshell: bool,
     /// Whether to continue when an error is encountered.
     pub cont: bool,
     /// Instruction to print the help info.
@@ -87,47 +98,61 @@ pub struct Opts {
 }
 
 impl Opts {
-    pub fn parse() -> Result<Opts, String> {
-        let mut exec: Option<OsString> = None;
-        let mut args: Vec<OsString> = Vec::new();
+    pub fn parse() -> Result<Opts, OsString> {
+        let mut exec: Option<String> = None;
+        let mut args: Vec<String> = Vec::new();
         let mut fence: Option<String> = None;
         let mut cont = false;
+        let mut subshell = false;
         let mut help = false;
         let mut version = false;
         let mut mode = ArgMode::Positional;
 
+        /*
+        Temporarily, but possibly permanently, removed. See long rant
+        starting on line 10.
+
+        ***
+
         let opt_map = make_opt_map();
+        */
 
         for arg in std::env::args_os().skip(1) {
+            let arg = arg.into_string()?;
             match mode {
                 ArgMode::PostPositional => args.push(arg),
-                ArgMode::Positional => match opt_map.get(&arg).cloned()
-                    .unwrap_or_default()
-                {
-                    ArgOpt::Hyphens => {
+                ArgMode::Positional => match arg.as_str() {
+                    "--" => {
                         mode = ArgMode::PostPositional;
                     }
-                    ArgOpt::Delimiter => {
+                    "-d" | "--delim" | "--delimiter" => {
                         if fence.is_none() {
                             mode = ArgMode::Fence;
                         } else {
                             args.push(arg);
                         }
                     }
-                    ArgOpt::Continue => {
+                    "-s" | "--sh" | "--sub" | "--shell" | "--subshell" => {
+                        if subshell {
+                            args.push(arg);
+                        } else {
+                            subshell = true;
+                        }
+                    }
+                    "-c" | "--cont" | "--continue" => {
                         if cont {
                             args.push(arg);
                         } else {
                             cont = true;
                         }
                     }
-                    ArgOpt::Help => {
+                    "-h" | "--help" => {
                         help = true;
                     }
-                    ArgOpt::Version => {
+                    "-V" | "--version" => {
                         version = true;
                     }
-                    ArgOpt::None => {
+                    _ => {
                         if exec.is_none() {
                             exec = Some(arg);
                         } else {
@@ -136,14 +161,7 @@ impl Opts {
                     }
                 },
                 ArgMode::Fence => {
-                    if let Some(dstr) = arg.to_str() {
-                        fence = Some(dstr.to_string());
-                    } else {
-                        return Err(format!(
-                            "invalid delimiter regex: {}",
-                            &arg.to_string_lossy()
-                        ));
-                    }
+                    fence = Some(arg);
                 }
             }
         }
@@ -155,6 +173,7 @@ impl Opts {
             args,
             fence,
             cont,
+            subshell,
             help,
             version,
         })
