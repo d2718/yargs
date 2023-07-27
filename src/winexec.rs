@@ -2,7 +2,9 @@
 Facilities for executing commands on Windows.
 */
 use super::err::YargErr;
+use shell_escape::windows::escape;
 use std::{
+    borrow::Cow,
     io::Write,
     process::{Command, Stdio},
 };
@@ -40,22 +42,24 @@ pub fn execute(item: &str, prog: &str, args: &[&str]) -> Result<(), YargErr> {
 
 pub fn shell_execute(item: &str, prog: &str, args: &[&str]) -> Result<(), YargErr> {
     let mut subbed = false;
-    let mut arg_vec: Vec<&str> = [prog]
+    let mut arg_vec: Vec<_> = [prog]
         .iter()
         .chain(args.iter())
-        .map(|s| {
-            if s == &"." {
+        .map(|&s| {
+            if s == "." {
                 subbed = true;
-                item
+                escape(Cow::from(item))
+            } else if s == "|" {
+                Cow::from("|")
             } else {
-                s
+                escape(Cow::from(s))
             }
         })
         .collect();
     if !subbed {
-        arg_vec.push(item);
+        arg_vec.push(Cow::from(item));
     }
-    let subshell_cmd = shlex::join(arg_vec);
+    let subshell_cmd = arg_vec.join(" ");
 
     let mut prog = Command::new(SHELL);
     prog.args(SHELL_ARGS).stdin(Stdio::piped());

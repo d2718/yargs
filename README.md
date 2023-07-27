@@ -12,6 +12,8 @@ Arguments:
 Options:
   -d, --delimiter <DELIM>  Regex to delimit input items
                            (default is "\r?\n")
+  -s, --subshell           Run each command in a subshell
+                           (default is to invoke directly)
   -c, --continue           Continue and ignore errors
                            (default is to halt upon error)
   -h, --help               Print this message
