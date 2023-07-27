@@ -62,11 +62,18 @@ pub fn shell_execute(item: &str, prog: &str, args: &[&str]) -> Result<(), YargEr
 
     let mut child = prog.spawn()?;
 
-    let mut input = child
-        .stdin
-        .take()
-        .ok_or_else(|| YargErr::new("can't get a handle on stdin".to_string()))?;
-    input.write_all(subshell_cmd.as_bytes())?;
+    /*
+    We need this scope here so that `child`'s stdin will get dropped.
+    Otherwise powershell will just wait to keep reading from stdin forever.
+    */
+    {
+        let mut input = child
+            .stdin
+            .take()
+            .ok_or_else(|| YargErr::new("can't get a handle on stdin".to_string()))?;
+        input.write_all(subshell_cmd.as_bytes())?;
+        input.flush()?;
+    }
 
     match child.wait() {
         Ok(status) => {
