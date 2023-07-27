@@ -121,7 +121,8 @@ README.md
 
 or better yet with a
 [`find`](https://www.gnu.org/software/findutils/manual/html_mono/find.html)-like
-utility for Windows (if one exists).
+utility for Windows (~~if one exists~~
+oh [one definitely does](https://github.com/d2718/fine)).
 
 However, a lot of facilities that are supplied by programs in a Unix-style
 environment are "PowerShell Cmdlets" that can't be run like a program:
