@@ -24,6 +24,13 @@ impl From<std::fmt::Error> for YargErr {
     }
 }
 
+impl From<std::io::Error> for YargErr {
+    fn from(e: std::io::Error) -> Self {
+        let msg = format!("I/O error: {}", &e);
+        YargErr(msg)
+    }
+}
+
 impl Error for YargErr {}
 
 fn format_cmd(prog: &Command) -> String {
