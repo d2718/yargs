@@ -1,5 +1,13 @@
 # yargs
 
+## Notice
+
+This tool has been added to a collection of tools:
+
+[`d2718/softies`](https://github.com/d2718/softies)
+
+Further development will occur there; this repository will be archived.
+
 ```text
 A friendlier xargs. Also a piratical exclamation.
 
